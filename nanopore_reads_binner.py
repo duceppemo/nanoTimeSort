@@ -255,25 +255,50 @@ class NanoReadsBinner(object):
             read.bin = np.digitize(read.time_string, bins)
 
         # TODO -> parallel output all the bins instead of having to go through the
-        #         whole dictionary for each bin
+        #         whole dictionary for each bin. DONE. Can it be done in a better way?
         # TODO -> check for any empty file and remove them
 
         # TODO -> no need to do the last bin, just copy and rename the original file
 
-        counter = 0
+        # Traverse the entire dictionary for each bin
+        # counter = 0
+        # for i in bins[1:]:  # skip first one, which is zero
+        #     print('\tBinning reads from 0 to {}{}... '.format(int(i), self.units), end="", flush=True)
+        #     with gzip.open(self.output_folder + '/' + self.prefix
+        #                    + '_0-' + str(int(i)) + self.units + '.fastq.gz', 'wt') as out_fh:
+        #         for ident, info in d.items():
+        #             if info.time_string < i:
+        #                 counter = counter + 1
+        #                 out_fh.write("{}\n{}\n{}\n{}\n".format(info.header.decode('ascii'),
+        #                                                        info.seq.decode('ascii'),
+        #                                                        '+',
+        #                                                        info.qual.decode('ascii')))
+        #     print('{} reads'.format(counter))
+        #     counter = 0
+
+        # Traverse dictionary once
+        # Create all the output file handles
+        fh_dict = dict()
         for i in bins[1:]:  # skip first one, which is zero
-            print('\tBinning reads from 0 to {}{}... '.format(int(i), self.units), end="", flush=True)
-            with gzip.open(self.output_folder + '/' + self.prefix
-                           + '_0-' + str(int(i)) + self.units + '.fastq.gz', 'wt') as out_fh:
-                for ident, info in d.items():
-                    if info.time_string < i:
-                        counter = counter + 1
-                        out_fh.write("{}\n{}\n{}\n{}\n".format(info.header.decode('ascii'),
-                                                               info.seq.decode('ascii'),
-                                                               '+',
-                                                               info.qual.decode('ascii')))
-            print('{} reads'.format(counter))
-            counter = 0
+            # output name format: test_0-210m.fastq.gz
+            fh = gzip.open(self.output_folder + '/' + self.prefix
+                           + '_0-' + str(int(i)) + self.units + '.fastq.gz', 'wt')
+            fh_dict[i] = fh  # Store file handles in dictionary key:value -> elapsed_time:file_handle
+
+        for ident, info in d.items():
+            # Loop the time bins
+            for i, fh in fh_dict.items():
+                # Write to bin if reads was produced the end time of bin
+                # Can write the same read to multiple bins
+                if info.time_string < i:
+                    fh.write("{}\n{}\n{}\n{}\n".format(info.header.decode('ascii'),
+                                                       info.seq.decode('ascii'),
+                                                       '+',
+                                                       info.qual.decode('ascii')))
+
+        # Close the file handles
+        for fh in fh_dict.values():
+            fh.close()
 
 
 if __name__ == '__main__':
