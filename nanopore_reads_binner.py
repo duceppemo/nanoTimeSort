@@ -268,7 +268,10 @@ class NanoReadsBinner(object):
                 for ident, info in d.items():
                     if info.time_string < i:
                         counter = counter + 1
-                        out_fh.write("{}\n{}\n{}\n{}\n".format(info.header, info.seq, '+', info.qual))
+                        out_fh.write("{}\n{}\n{}\n{}\n".format(info.header.decode('ascii'),
+                                                               info.seq.decode('ascii'),
+                                                               '+',
+                                                               info.qual.decode('ascii')))
             print('{} reads'.format(counter))
             counter = 0
 
@@ -287,12 +290,12 @@ if __name__ == '__main__':
                         help='Output folder')
     parser.add_argument('-t', '--threads', metavar='{}'.format(cpu),
                         required=False, default=cpu,
-                        help='Number of CPU'
+                        help='Number of CPU\n'
                              'Default: {}'.format(cpu))
     parser.add_argument('-i', '--interval', metavar='1h',
                         required=True,
                         default='1h',
-                        help='Time interval to create the bins.'
+                        help='Time interval to create the bins.\n'
                              'Use integer values (no decimal)'
                              'Can use \'h\', \'m\' or \'s\''
                              'Bins are cumulative. If interval is set to at 1h, second bin will'
