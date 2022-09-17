@@ -1,5 +1,5 @@
-#!/usr/local/env python3.6
-
+#!/usr/local/env python3
+import glob
 import os
 import gzip
 import sys
@@ -11,6 +11,10 @@ import pathlib
 import operator
 import numpy as np
 from math import ceil
+
+
+__author__ = 'duceppemo'
+__version__ = '0.1'
 
 
 class FastqObjects(object):
@@ -72,8 +76,10 @@ class NanoReadsBinner(object):
             if not self.sample_dict:
                 raise Exception('No data!')
             else:
+                print('Binning reads...')
                 self.convert_datetimes(self.sample_dict)  # convert datetimes to elapsed time
                 self.assign_bins(self.sample_dict)
+                self.rename_files()
 
         self.total_time.append(time())
         print("\n Total run time: {}".format(NanoReadsBinner.elapsed_time(self.total_time[1] - self.total_time[0])))
@@ -300,16 +306,35 @@ class NanoReadsBinner(object):
         for fh in fh_dict.values():
             fh.close()
 
+    def rename_files(self):
+        file_list = glob.glob(self.output_folder + '/*.fastq.gz')
+        for fastq in file_list:
+            total_reads = 0
+            total_bp = 0
+            with gzip.open(fastq, 'rb', 1024 * 1024) as file_handle:
+                counter = 0
+                for line in file_handle:
+                    counter += 1
+                    if counter == 2:
+                        line = line.rstrip()
+                        total_reads += 1
+                        total_bp += len(line)
+                    if counter == 4:
+                        counter = 0
+
+            os.rename(fastq, fastq.replace('.fastq.gz', '') + '_' + str(total_reads)
+                      + 'reads' + '_' + str(total_bp) + 'bp.fastq.gz')
+
 
 if __name__ == '__main__':
     from multiprocessing import cpu_count
 
     cpu = cpu_count()
 
-    parser = ArgumentParser(description='Bin MinION reads by (cumulative) intervals')
+    parser = ArgumentParser(description='Bin MinION reads by elapsed sequencing time intervals')
     parser.add_argument('-f', '--fastq', metavar='/basecalled/folder/',
                         required=True,
-                        help='Input folder with fastq file(s), gzipped or not')
+                        help='Input folder with fastq file(s), gzipped or not.')
     parser.add_argument('-o', '--output', metavar='/qc/',
                         required=True,
                         help='Output folder')
@@ -320,17 +345,16 @@ if __name__ == '__main__':
     parser.add_argument('-i', '--interval', metavar='1h',
                         required=True,
                         default='1h',
-                        help='Time interval to create the bins.\n'
-                             'Use integer values (no decimal)'
-                             'Can use \'h\', \'m\' or \'s\''
-                             'Bins are cumulative. If interval is set to at 1h, second bin will'
-                             'also contains the reads from the first bin.'
+                        help='Time interval to create the bins. Use integer values (no decimal). '
+                             'Can use \'h\', \'m\' or \'s\'. '
+                             'Bins are cumulative. If interval is set to at 1h, second bin will '
+                             'also contains the reads from the first bin. '
                              'Default: 1h')
     parser.add_argument('-p', '--prefix', metavar='my_output_name',
                         required=False,
                         default='interval',
-                        help='Output file prefix'
-                             'If using "my_sample" as prefix, files will be named "my_sample_1h.fastq.gz", etc.'
+                        help='Output file prefix. '
+                             'If using "my_sample" as prefix, files will be named "my_sample_1h.fastq.gz", etc. '
                              'Default: interval')
 
     # Get the arguments into an object
