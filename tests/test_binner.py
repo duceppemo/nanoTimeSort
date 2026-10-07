@@ -123,3 +123,28 @@ def test_reads_without_timestamp_are_skipped(tmp_path, capsys):
     binner = NanoTimeSort(str(fastq_dir), str(out_dir), interval="1h", threads=1)
     outputs = binner.run()
     assert sorted(read_ids(outputs[-1])) == ["good1", "good2"]
+
+
+def test_handle_eviction_with_many_bins(run_folder, tmp_path, monkeypatch):
+    """With more bins than allowed open handles, chunks are reopened in
+    append mode and no read is lost."""
+    import nanotimesort.binner as binner_module
+
+    monkeypatch.setattr(binner_module, "MAX_OPEN_CHUNKS", 1)
+    out_dir = tmp_path / "out_evict"
+    binner = NanoTimeSort(
+        input_path=str(run_folder),
+        output_folder=str(out_dir),
+        interval="10m",  # 150 min run -> 16 bins, far above the cap of 1
+        prefix="evict",
+        threads=1,
+    )
+    outputs = binner.run()
+    assert len(outputs) == 16
+    assert sorted(read_ids(outputs[-1])) == ["read1", "read2", "read3", "read4", "read5"]
+    # Every cumulative file must contain its predecessor's reads.
+    previous = set()
+    for path in outputs:
+        current = set(read_ids(path))
+        assert previous <= current
+        previous = current

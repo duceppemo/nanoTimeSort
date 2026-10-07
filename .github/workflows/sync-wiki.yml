@@ -1,14 +1,22 @@
 name: Sync wiki
 
-# docs/wiki/ in this repository is the source of truth for the GitHub wiki.
-# Any change to it on master is pushed to the wiki automatically; do not edit
-# the wiki directly, your changes would be overwritten by the next sync.
+# docs/wiki/ on master is the source of truth for the GitHub wiki.
+# Any change to it is pushed to the wiki automatically; do not edit the wiki
+# directly, your changes would be overwritten by the next sync.
+# The daily schedule re-drives the mirror if a sync run ever failed.
 
 on:
   push:
     branches: [master]
     paths: ["docs/wiki/**"]
+  schedule:
+    - cron: "17 4 * * *"
   workflow_dispatch:
+
+# Serialize runs so an older sync can never race a newer one on the push.
+concurrency:
+  group: sync-wiki
+  cancel-in-progress: false
 
 jobs:
   sync:
@@ -17,9 +25,15 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Push docs/wiki to the GitHub wiki
+        with:
+          # Always sync from master, even when dispatched from another ref.
+          ref: master
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}.wiki
+          path: wiki-repo
+      - name: Mirror docs/wiki to the wiki
         run: |
-          git clone "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.wiki.git" wiki-repo
           rsync -av --delete --exclude .git docs/wiki/ wiki-repo/
           cd wiki-repo
           git config user.name "github-actions[bot]"

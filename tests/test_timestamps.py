@@ -46,3 +46,19 @@ def test_naive_timestamp_assumed_utc():
 def test_z_suffix_with_milliseconds():
     dt = parse_timestamp("2023-09-01T11:13:45.7Z")
     assert dt == datetime(2023, 9, 1, 11, 13, 45, 700000, tzinfo=timezone.utc)
+
+
+def test_normalize_z_suffix():
+    from nanotimesort.timestamps import _normalize
+
+    assert _normalize("2019-07-16T19:51:22Z") == "2019-07-16T19:51:22+00:00"
+    assert _normalize("2019-07-16T19:51:22z") == "2019-07-16T19:51:22+00:00"
+
+
+def test_normalize_fractional_digits():
+    from nanotimesort.timestamps import _normalize
+
+    # Padded to 6 digits for strict parsers (Python < 3.11)...
+    assert _normalize("2023-09-01T11:13:45.731+00:00") == "2023-09-01T11:13:45.731000+00:00"
+    # ...and excess digits truncated to 6.
+    assert _normalize("2023-09-01T11:13:45.1234567890Z") == "2023-09-01T11:13:45.123456+00:00"

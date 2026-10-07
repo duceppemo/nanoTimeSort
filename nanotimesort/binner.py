@@ -23,12 +23,13 @@ import os
 import shutil
 import sys
 import tempfile
+from collections import OrderedDict
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
 from math import floor
 from time import time
-from typing import IO, Dict, Iterator, List, Optional, Tuple
+from typing import IO, Iterator, List, Optional, Tuple
 
 from .timestamps import extract_start_time
 
@@ -36,6 +37,13 @@ UNIT_SECONDS = {"h": 3600.0, "m": 60.0, "s": 1.0}
 UNIT_NAMES = {"h": "hour", "m": "minute", "s": "second"}
 
 _COPY_BUFFER = 4 * 1024 * 1024
+
+# Cap on simultaneously open chunk files per worker. Small intervals over a
+# long run can produce tens of thousands of bins, which would exhaust the
+# process file-descriptor limit if every chunk stayed open. Evicted chunks
+# are reopened in append mode, which adds a new gzip member -- exactly what
+# the assembly stage concatenates anyway.
+MAX_OPEN_CHUNKS = 128
 
 
 @dataclass
@@ -117,7 +125,7 @@ def chunk_file(
     """
     reads_per_bin = [0] * num_bins
     bp_per_bin = [0] * num_bins
-    handles: Dict[int, IO[bytes]] = {}
+    handles: "OrderedDict[int, IO[bytes]]" = OrderedDict()
 
     if os.path.getsize(path) == 0:
         return reads_per_bin, bp_per_bin
@@ -135,8 +143,13 @@ def chunk_file(
                     chunk_path = os.path.join(
                         chunk_dir, "chunk_b{:06d}_f{:06d}.fastq.gz".format(bin_index, file_index)
                     )
-                    out = gzip.open(chunk_path, "wb", compresslevel=compresslevel)
+                    out = gzip.open(chunk_path, "ab", compresslevel=compresslevel)
                     handles[bin_index] = out
+                    if len(handles) > MAX_OPEN_CHUNKS:
+                        _old_bin, old_handle = handles.popitem(last=False)
+                        old_handle.close()
+                else:
+                    handles.move_to_end(bin_index)
                 out.write(header + b"\n" + seq + b"\n+\n" + qual + b"\n")
                 reads_per_bin[bin_index] += 1
                 bp_per_bin[bin_index] += len(seq)
