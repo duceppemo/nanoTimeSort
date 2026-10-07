@@ -6,6 +6,11 @@ authors:
   - family-names: Duceppe
     given-names: Marc-Olivier
     email: duceppemo@gmail.com
+doi: 10.5281/zenodo.23216301
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.23216301
+    description: "Concept DOI, always resolves to the latest version"
 repository-code: "https://github.com/duceppemo/nanoTimeSort"
 url: "https://github.com/duceppemo/nanoTimeSort/wiki"
 license: MIT
