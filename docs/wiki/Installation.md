@@ -17,9 +17,11 @@ pip install nanotimesort
 conda install -c conda-forge -c bioconda nanotimesort
 ```
 
+<!-- bioconda-pending-start -->
 > ⏳ The bioconda recipe is currently under review
 > ([bioconda/bioconda-recipes#70005](https://github.com/bioconda/bioconda-recipes/pull/70005)).
 > Until it is merged, use the PyPI install above.
+<!-- bioconda-pending-end -->
 
 ## From GitHub
 

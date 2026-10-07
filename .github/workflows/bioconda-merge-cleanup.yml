@@ -1,0 +1,46 @@
+name: Bioconda merge cleanup
+
+# One-shot housekeeping: once bioconda/bioconda-recipes#70005 (the nanotimesort
+# recipe) is merged, remove the "under review" note from the wiki Installation
+# page, re-sync the wiki, and disable this workflow. Safe to delete this file
+# after it has done its job.
+
+on:
+  schedule:
+    - cron: "23 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+      - name: Remove the note if the bioconda PR is merged
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          state=$(gh pr view 70005 --repo bioconda/bioconda-recipes --json state -q .state)
+          echo "Bioconda PR state: $state"
+          if [ "$state" != "MERGED" ]; then
+            echo "Not merged yet; nothing to do."
+            exit 0
+          fi
+          sed -i '/<!-- bioconda-pending-start -->/,/<!-- bioconda-pending-end -->/d' docs/wiki/Installation.md
+          if git diff --quiet; then
+            echo "Note already removed; disabling workflow."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -am "Bioconda recipe merged: remove 'under review' note"
+            git push
+            # Pushes made with GITHUB_TOKEN do not trigger other workflows,
+            # so kick the wiki sync explicitly.
+            gh workflow run sync-wiki.yml --ref master --repo "$GITHUB_REPOSITORY"
+          fi
+          gh workflow disable bioconda-merge-cleanup.yml --repo "$GITHUB_REPOSITORY"
