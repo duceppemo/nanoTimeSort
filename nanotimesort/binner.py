@@ -23,6 +23,7 @@ import os
 import shutil
 import sys
 import tempfile
+import zlib
 from collections import OrderedDict
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
@@ -95,17 +96,20 @@ def scan_file(path: str) -> ScanResult:
     result = ScanResult()
     if os.path.getsize(path) == 0:
         return result
-    with open_fastq(path) as handle:
-        for header, _seq, _qual in fastq_records(handle):
-            start_time = extract_start_time(header)
-            if start_time is None:
-                result.missing += 1
-                continue
-            result.reads += 1
-            if result.t_min is None or start_time < result.t_min:
-                result.t_min = start_time
-            if result.t_max is None or start_time > result.t_max:
-                result.t_max = start_time
+    try:
+        with open_fastq(path) as handle:
+            for header, _seq, _qual in fastq_records(handle):
+                start_time = extract_start_time(header)
+                if start_time is None:
+                    result.missing += 1
+                    continue
+                result.reads += 1
+                if result.t_min is None or start_time < result.t_min:
+                    result.t_min = start_time
+                if result.t_max is None or start_time > result.t_max:
+                    result.t_max = start_time
+    except (EOFError, zlib.error, gzip.BadGzipFile) as err:
+        raise ValueError("Corrupt or truncated input file {}: {}".format(path, err)) from err
     return result
 
 
@@ -157,6 +161,8 @@ def chunk_file(
                 out.write(header + b"\n" + seq + b"\n+\n" + qual + b"\n")
                 reads_per_bin[bin_index] += 1
                 bp_per_bin[bin_index] += len(seq)
+    except (EOFError, zlib.error, gzip.BadGzipFile) as err:
+        raise ValueError("Corrupt or truncated input file {}: {}".format(path, err)) from err
     finally:
         for out in handles.values():
             out.close()
@@ -182,6 +188,8 @@ class NanoTimeSort:
         compresslevel: int = 4,
         max_time: Optional[str] = None,
     ):
+        if os.sep in prefix or (os.altsep and os.altsep in prefix):
+            raise ValueError("Prefix must not contain path separators: '{}'".format(prefix))
         self.input_path = input_path
         self.output_folder = output_folder
         self.prefix = prefix

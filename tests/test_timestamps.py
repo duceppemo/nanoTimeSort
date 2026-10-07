@@ -62,3 +62,37 @@ def test_normalize_fractional_digits():
     assert _normalize("2023-09-01T11:13:45.731+00:00") == "2023-09-01T11:13:45.731000+00:00"
     # ...and excess digits truncated to 6.
     assert _normalize("2023-09-01T11:13:45.1234567890Z") == "2023-09-01T11:13:45.123456+00:00"
+
+
+def test_non_utc_offset_converted_consistently():
+    # 12:00+02:00 is 10:00 UTC, i.e. EARLIER than 11:00Z.
+    a = parse_timestamp("2024-05-01T12:00:00+02:00")
+    b = parse_timestamp("2024-05-01T11:00:00Z")
+    assert a < b
+    assert (b - a).total_seconds() == 3600
+
+
+def test_first_time_field_wins():
+    # Both dialects present: the first field encountered is used.
+    header = b"@r1 start_time=2024-05-01T10:00:00Z st:Z:2024-05-01T12:00:00Z"
+    dt = extract_start_time(header)
+    assert dt == datetime(2024, 5, 1, 10, 0, 0, tzinfo=timezone.utc)
+
+
+def test_similar_field_names_do_not_match():
+    # Only an exact 'start_time=' prefix counts, not e.g. parent fields.
+    header = b"@r1 parent_start_time=2024-05-01T10:00:00Z other=1"
+    assert extract_start_time(header) is None
+
+
+def test_malformed_timestamp_returns_none():
+    assert extract_start_time(b"@r1 start_time=notadate ch=1") is None
+    assert extract_start_time(b"@r1 st:Z:2024-99-99T99:99:99Z") is None
+    assert extract_start_time(b"@r1 start_time=") is None
+
+
+def test_malformed_timestamp_raises_in_direct_parse():
+    import pytest
+
+    with pytest.raises(ValueError):
+        parse_timestamp("notadate")

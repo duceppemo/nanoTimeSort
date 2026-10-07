@@ -53,3 +53,18 @@ def test_version(capsys):
         main(["--version"])
     assert exc.value.code == 0
     assert __version__ in capsys.readouterr().out
+
+
+def test_main_bad_max_time(fastq_folder, tmp_path):
+    rc = main(["-f", str(fastq_folder), "-o", str(tmp_path / "out"), "-i", "1h", "-m", "2x"])
+    assert rc == 1
+
+
+def test_main_zero_max_time(fastq_folder, tmp_path):
+    rc = main(["-f", str(fastq_folder), "-o", str(tmp_path / "out"), "-i", "1h", "-m", "0h"])
+    assert rc == 1
+
+
+def test_main_prefix_with_path_separator(fastq_folder, tmp_path):
+    rc = main(["-f", str(fastq_folder), "-o", str(tmp_path / "out"), "-i", "1h", "-p", "a/b"])
+    assert rc == 1

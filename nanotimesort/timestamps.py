@@ -27,17 +27,27 @@ _FRACTION_RE = re.compile(r"\.(\d+)")
 
 
 def extract_start_time(header: bytes) -> Optional[datetime]:
-    """Return the read start time from a FASTQ header line, or None if absent.
+    """Return the read start time from a FASTQ header line.
+
+    Returns None when the header has no time field, or when the field's value
+    cannot be parsed -- a single corrupt header must not abort a whole run.
 
     :param header: raw FASTQ header line (bytes, with or without trailing newline)
     :return: timezone-aware datetime (UTC assumed when the timestamp is naive)
     """
     for item in header.split():
         if item.startswith(_GUPPY_PREFIX):
-            return parse_timestamp(item[len(_GUPPY_PREFIX):])
+            return _parse_or_none(item[len(_GUPPY_PREFIX):])
         if item.startswith(_DORADO_PREFIX):
-            return parse_timestamp(item[len(_DORADO_PREFIX):])
+            return _parse_or_none(item[len(_DORADO_PREFIX):])
     return None
+
+
+def _parse_or_none(raw: bytes) -> Optional[datetime]:
+    try:
+        return parse_timestamp(raw)
+    except (ValueError, UnicodeDecodeError):
+        return None
 
 
 def parse_timestamp(raw: Union[bytes, str]) -> datetime:
