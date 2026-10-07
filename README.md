@@ -3,6 +3,7 @@
 </p>
 
 <p align="center">
+  <a href="https://pypi.org/project/nanotimesort/"><img src="https://img.shields.io/pypi/v/nanotimesort.svg" alt="PyPI"></a>
   <a href="https://github.com/duceppemo/nanoTimeSort/actions/workflows/ci.yml"><img src="https://github.com/duceppemo/nanoTimeSort/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://codecov.io/gh/duceppemo/nanoTimeSort"><img src="https://codecov.io/gh/duceppemo/nanoTimeSort/branch/master/graph/badge.svg" alt="codecov"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
@@ -28,7 +29,7 @@ pure standard library.
 ## Install
 
 ```bash
-pip install git+https://github.com/duceppemo/nanoTimeSort.git
+pip install nanotimesort
 ```
 
 Requires Python ≥ 3.8. No other dependencies.

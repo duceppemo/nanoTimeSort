@@ -29,7 +29,7 @@ the sequencer. Typical uses:
 ## Quick start
 
 ```bash
-pip install git+https://github.com/duceppemo/nanoTimeSort.git
+pip install nanotimesort
 nanotimesort -f fastq_pass/ -o binned/ -i 1h -p my_sample
 ```
 

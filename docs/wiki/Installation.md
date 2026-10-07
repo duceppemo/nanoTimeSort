@@ -5,7 +5,13 @@
 - Python ≥ 3.8
 - That's it — nanoTimeSort has **no third-party dependencies** (pure standard library).
 
-## From GitHub (recommended)
+## From PyPI (recommended)
+
+```bash
+pip install nanotimesort
+```
+
+## From GitHub
 
 ```bash
 pip install git+https://github.com/duceppemo/nanoTimeSort.git
@@ -26,7 +32,7 @@ Both install the `nanotimesort` command.
 ```bash
 conda create -n nanotimesort python=3.12 pip
 conda activate nanotimesort
-pip install git+https://github.com/duceppemo/nanoTimeSort.git
+pip install nanotimesort
 ```
 
 ## For development

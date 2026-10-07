@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nanotimesort"
-version = "1.0.0"
+dynamic = ["version"]
 description = "Bin Oxford Nanopore reads by cumulative sequencing time intervals (Guppy and Dorado compatible)"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -35,6 +35,9 @@ nanotimesort = "nanotimesort.cli:main"
 
 [tool.setuptools]
 packages = ["nanotimesort"]
+
+[tool.setuptools.dynamic]
+version = { attr = "nanotimesort.__version__" }
 
 [tool.ruff]
 line-length = 110
