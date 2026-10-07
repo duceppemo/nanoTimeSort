@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nanotimesort"
+version = "1.0.0"
+description = "Bin Oxford Nanopore reads by cumulative sequencing time intervals (Guppy and Dorado compatible)"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Marc-Olivier Duceppe", email = "duceppemo@gmail.com" }]
+requires-python = ">=3.8"
+keywords = ["nanopore", "fastq", "bioinformatics", "minion", "dorado", "guppy", "binning"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff"]
+
+[project.urls]
+Homepage = "https://github.com/duceppemo/nanoTimeSort"
+Issues = "https://github.com/duceppemo/nanoTimeSort/issues"
+Wiki = "https://github.com/duceppemo/nanoTimeSort/wiki"
+
+[project.scripts]
+nanotimesort = "nanotimesort.cli:main"
+
+[tool.setuptools]
+packages = ["nanotimesort"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py38"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
