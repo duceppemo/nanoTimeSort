@@ -398,3 +398,59 @@ def test_corrupt_gzip_propagates_from_parallel_workers(run_folder, tmp_path):
     (run_folder / "broken.fastq.gz").write_bytes(b"\x1f\x8b\x08\x00garbage-not-gzip")
     with pytest.raises(ValueError, match="broken.fastq.gz"):
         run_binner(run_folder, tmp_path / "out", threads=2)
+
+
+# --- Regressions from the second review pass ------------------------------
+
+
+def test_float_imprecision_no_spurious_bin(run_folder, tmp_path):
+    """(1.1*3600)/(0.1*3600) floats to 11.000000000000002; ceil must not
+    create a 12th bin whose name collides and truncates the last output."""
+    outputs = run_binner(run_folder, tmp_path / "out", interval="0.1h", max_time="1.1h")
+    names = [os.path.basename(p) for p in outputs]
+    assert len(outputs) == 11
+    assert len(set(names)) == len(names)  # no filename collisions
+    # Cutoff is 66 min: reads at 0 and 30 min survive, 70+ are dropped.
+    assert names[-1] == "edge_0-1.1h_2reads_80bp.fastq.gz"
+    assert os.path.getsize(outputs[-1]) > 0
+    assert sorted(read_ids(outputs[-1])) == ["read1", "read2"]
+
+
+def test_cutoff_equal_to_run_length_keeps_last_read(tmp_path):
+    """-m equal to the exact run span must not drop the t_max read."""
+    folder = tmp_path / "fq"
+    content = make_read("first", 0) + make_read("last", 60)  # span exactly 1 h
+    write_fastq(folder, "exact.fastq", content)
+    outputs = run_binner(folder, tmp_path / "out", interval="1h", max_time="1h")
+    assert sorted(read_ids(outputs[-1])) == ["first", "last"]
+
+
+def test_max_time_error_names_the_right_flag():
+    with pytest.raises(ValueError, match="--max-time"):
+        NanoTimeSort("in", "out", interval="1h", max_time="2x")
+    with pytest.raises(ValueError, match="--max-time"):
+        NanoTimeSort("in", "out", interval="1h", max_time="0h")
+    with pytest.raises(ValueError, match="--interval"):
+        NanoTimeSort("in", "out", interval="1x")
+
+
+def test_timestampless_file_not_counted_as_cutoff_skip(run_folder, tmp_path, capsys):
+    """A file with no timestamps is not 'past the cutoff'."""
+    (run_folder / "notime.fastq").write_text("@bare length=4\nACGT\n+\nIIII\n")
+    run_binner(run_folder, tmp_path / "out", interval="1h", max_time="3h")
+    out = capsys.readouterr().out
+    assert "past the cutoff" not in out
+
+
+def test_malformed_warning_is_distinct(tmp_path, capsys):
+    folder = tmp_path / "fq"
+    content = (
+        make_read("ok", 0)
+        + "@garbled runid=abc start_time=notadate\nACGT\n+\nIIII\n"
+        + "@bare length=4\nACGT\n+\nIIII\n"
+    )
+    write_fastq(folder, "mixed.fastq", content)
+    run_binner(folder, tmp_path / "out")
+    err = capsys.readouterr().err
+    assert "1 read(s) without a 'start_time=' or 'st:Z:' header field" in err
+    assert "1 read(s) with an unparseable start time" in err

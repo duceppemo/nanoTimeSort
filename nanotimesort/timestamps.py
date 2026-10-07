@@ -35,11 +35,19 @@ def extract_start_time(header: bytes) -> Optional[datetime]:
     :param header: raw FASTQ header line (bytes, with or without trailing newline)
     :return: timezone-aware datetime (UTC assumed when the timestamp is naive)
     """
+    raw = find_time_field(header)
+    if raw is None:
+        return None
+    return _parse_or_none(raw)
+
+
+def find_time_field(header: bytes) -> Optional[bytes]:
+    """Return the raw value of the first start-time field, or None if absent."""
     for item in header.split():
         if item.startswith(_GUPPY_PREFIX):
-            return _parse_or_none(item[len(_GUPPY_PREFIX):])
+            return item[len(_GUPPY_PREFIX):]
         if item.startswith(_DORADO_PREFIX):
-            return _parse_or_none(item[len(_DORADO_PREFIX):])
+            return item[len(_DORADO_PREFIX):]
     return None
 
 

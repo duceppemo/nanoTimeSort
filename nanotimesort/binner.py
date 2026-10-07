@@ -32,7 +32,7 @@ from math import ceil, floor
 from time import time
 from typing import IO, Iterator, List, Optional, Tuple
 
-from .timestamps import extract_start_time
+from .timestamps import extract_start_time, find_time_field, parse_timestamp
 
 UNIT_SECONDS = {"h": 3600.0, "m": 60.0, "s": 1.0}
 UNIT_NAMES = {"h": "hour", "m": "minute", "s": "second"}
@@ -52,7 +52,8 @@ class ScanResult:
     """Summary of one scan pass over a FASTQ file."""
 
     reads: int = 0
-    missing: int = 0  # reads without a recognizable start time
+    missing: int = 0  # reads with no start-time field in the header
+    malformed: int = 0  # reads whose start-time value failed to parse
     t_min: Optional[datetime] = None
     t_max: Optional[datetime] = None
 
@@ -99,9 +100,14 @@ def scan_file(path: str) -> ScanResult:
     try:
         with open_fastq(path) as handle:
             for header, _seq, _qual in fastq_records(handle):
-                start_time = extract_start_time(header)
-                if start_time is None:
+                raw = find_time_field(header)
+                if raw is None:
                     result.missing += 1
+                    continue
+                try:
+                    start_time = parse_timestamp(raw)
+                except (ValueError, UnicodeDecodeError):
+                    result.malformed += 1
                     continue
                 result.reads += 1
                 if result.t_min is None or start_time < result.t_min:
@@ -201,26 +207,26 @@ class NanoTimeSort:
             self.max_seconds = None
             self.max_label = None
         else:
-            max_value, max_units = self._parse_interval(max_time)
+            max_value, max_units = self._parse_interval(max_time, flag="--max-time")
             self.max_seconds = max_value * UNIT_SECONDS[max_units]
             # Label the truncated last bin the way the user wrote the cutoff.
             self.max_label = format_number(max_value) + max_units
 
     @staticmethod
-    def _parse_interval(interval: str) -> Tuple[float, str]:
+    def _parse_interval(interval: str, flag: str = "--interval") -> Tuple[float, str]:
         units = interval[-1].lower()
         if units not in UNIT_SECONDS:
             raise ValueError(
-                "Invalid interval unit '{}'. Use one of: {}".format(
-                    units, ", ".join(sorted(UNIT_SECONDS))
+                "Invalid unit '{}' in {} value '{}'. Use one of: {}".format(
+                    units, flag, interval, ", ".join(sorted(UNIT_SECONDS))
                 )
             )
         try:
             bin_size = float(interval[:-1])
         except ValueError:
-            raise ValueError("Invalid interval value: '{}'".format(interval)) from None
+            raise ValueError("Invalid {} value: '{}'".format(flag, interval)) from None
         if bin_size <= 0:
-            raise ValueError("Interval must be greater than zero.")
+            raise ValueError("{} must be greater than zero.".format(flag))
         return bin_size, units
 
     def run(self) -> List[str]:
@@ -239,6 +245,7 @@ class NanoTimeSort:
         scans = self._map(scan_file, fastq_list, workers)
         total_reads = sum(s.reads for s in scans)
         total_missing = sum(s.missing for s in scans)
+        total_malformed = sum(s.malformed for s in scans)
         t_mins = [s.t_min for s in scans if s.t_min is not None]
         t_maxs = [s.t_max for s in scans if s.t_max is not None]
         print(" {} reads in {}".format(total_reads, elapsed_time(time() - start)))
@@ -246,6 +253,12 @@ class NanoTimeSort:
             print(
                 "Warning: {} read(s) without a 'start_time=' or 'st:Z:' header field "
                 "were skipped.".format(total_missing),
+                file=sys.stderr,
+            )
+        if total_malformed:
+            print(
+                "Warning: {} read(s) with an unparseable start time value were skipped "
+                "(field present but not a valid timestamp).".format(total_malformed),
                 file=sys.stderr,
             )
         if not t_mins:
@@ -257,9 +270,15 @@ class NanoTimeSort:
         t_min, t_max = min(t_mins), max(t_maxs)
         run_seconds = (t_max - t_min).total_seconds()
         cutoff = None
-        if self.max_seconds is not None and self.max_seconds <= run_seconds:
+        # Strictly '<': a cutoff equal to the run length must not silently
+        # drop the read(s) acquired at exactly t_max.
+        if self.max_seconds is not None and self.max_seconds < run_seconds:
             cutoff = self.max_seconds
-            num_bins = ceil(cutoff / self.bin_seconds)
+            # The small tolerance guards against float imprecision creating a
+            # spurious extra bin (e.g. (1.1*3600)/(0.1*3600) -> 11.000000000000002,
+            # whose ceil would be 12); the extra bin's name would collide with
+            # the real last bin's cutoff label.
+            num_bins = max(1, ceil(cutoff / self.bin_seconds - 1e-9))
             print(
                 "Run spans {}; binning only the first {} -> {} interval(s) of {}{}".format(
                     elapsed_time(run_seconds), self.max_label, num_bins,
@@ -283,10 +302,9 @@ class NanoTimeSort:
             jobs = []
             skipped_files = 0
             for i, path in enumerate(fastq_list):
-                if cutoff is not None and (
-                    scans[i].t_min is None
-                    or (scans[i].t_min - t_min).total_seconds() >= cutoff
-                ):
+                if scans[i].t_min is None:
+                    continue  # no binnable reads in this file at any time
+                if cutoff is not None and (scans[i].t_min - t_min).total_seconds() >= cutoff:
                     skipped_files += 1
                     continue
                 jobs.append(
@@ -324,6 +342,7 @@ class NanoTimeSort:
     ) -> List[str]:
         chunk_names = sorted(os.listdir(chunk_dir))
         outputs: List[str] = []
+        seen_names = set()
         previous_path: Optional[str] = None
         cumulative_reads = 0
         cumulative_bp = 0
@@ -342,6 +361,14 @@ class NanoTimeSort:
                 self.prefix, span, cumulative_reads, cumulative_bp
             )
             out_path = os.path.join(self.output_folder, out_name)
+            # Opening a colliding name 'wb' would silently truncate the
+            # previous cumulative file before it is read back; fail loudly
+            # instead if bin labels ever collide.
+            if out_name in seen_names:
+                raise RuntimeError(
+                    "Internal error: output name collision for '{}'".format(out_name)
+                )
+            seen_names.add(out_name)
             prefix = "chunk_b{:06d}_".format(b)
             with open(out_path, "wb") as out:
                 if previous_path is not None:
