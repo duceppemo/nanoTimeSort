@@ -148,3 +148,103 @@ def test_handle_eviction_with_many_bins(run_folder, tmp_path, monkeypatch):
         current = set(read_ids(path))
         assert previous <= current
         previous = current
+
+
+def test_max_time_single_file(run_folder, tmp_path):
+    """-i 2h -m 2h: one output with only the first two hours."""
+    out_dir = tmp_path / "out_cutoff"
+    binner = NanoTimeSort(
+        input_path=str(run_folder),
+        output_folder=str(out_dir),
+        interval="2h",
+        prefix="cut",
+        threads=1,
+        max_time="2h",
+    )
+    outputs = binner.run()
+    # Reads at 0, 30, 70 and 90 min are < 2 h; the 150 min read is dropped.
+    assert [os.path.basename(p) for p in outputs] == ["cut_0-2h_4reads_160bp.fastq.gz"]
+    assert sorted(read_ids(outputs[0])) == ["read1", "read2", "read3", "read4"]
+
+
+def test_max_time_shorter_than_interval(run_folder, tmp_path):
+    """A cutoff below the interval yields one file labeled with the cutoff."""
+    out_dir = tmp_path / "out_short"
+    binner = NanoTimeSort(
+        input_path=str(run_folder),
+        output_folder=str(out_dir),
+        interval="1h",
+        prefix="short",
+        threads=1,
+        max_time="45m",
+    )
+    outputs = binner.run()
+    assert [os.path.basename(p) for p in outputs] == ["short_0-45m_2reads_80bp.fastq.gz"]
+    assert sorted(read_ids(outputs[0])) == ["read1", "read2"]
+
+
+def test_max_time_truncated_last_bin(run_folder, tmp_path):
+    """Cutoff that is not a multiple of the interval: honest last label."""
+    out_dir = tmp_path / "out_trunc"
+    binner = NanoTimeSort(
+        input_path=str(run_folder),
+        output_folder=str(out_dir),
+        interval="1h",
+        prefix="trunc",
+        threads=1,
+        max_time="100m",
+    )
+    outputs = binner.run()
+    names = [os.path.basename(p) for p in outputs]
+    assert names == [
+        "trunc_0-1h_2reads_80bp.fastq.gz",
+        "trunc_0-100m_4reads_160bp.fastq.gz",
+    ]
+    assert sorted(read_ids(outputs[-1])) == ["read1", "read2", "read3", "read4"]
+
+
+def test_max_time_beyond_run_end_is_noop(run_folder, tmp_path):
+    """A cutoff past the end of the run changes nothing."""
+    out_dir = tmp_path / "out_noop"
+    binner = NanoTimeSort(
+        input_path=str(run_folder),
+        output_folder=str(out_dir),
+        interval="1h",
+        prefix="test",
+        threads=1,
+        max_time="10h",
+    )
+    outputs = binner.run()
+    assert len(outputs) == 3
+    assert sorted(read_ids(outputs[-1])) == ["read1", "read2", "read3", "read4", "read5"]
+
+
+def test_max_time_boundary_read_excluded(run_folder, tmp_path):
+    """A read at exactly the cutoff is excluded (half-open interval)."""
+    out_dir = tmp_path / "out_edge"
+    binner = NanoTimeSort(
+        input_path=str(run_folder),
+        output_folder=str(out_dir),
+        interval="30m",
+        prefix="edge",
+        threads=1,
+        max_time="90m",  # read4 sits at exactly 90 min
+    )
+    outputs = binner.run()
+    assert sorted(read_ids(outputs[-1])) == ["read1", "read2", "read3"]
+
+
+def test_max_time_skips_late_files(run_folder, tmp_path):
+    """part2.fastq starts at 90 min; a 1 h cutoff must skip it entirely."""
+    out_dir = tmp_path / "out_skip"
+    binner = NanoTimeSort(
+        input_path=str(run_folder),
+        output_folder=str(out_dir),
+        interval="1h",
+        prefix="skip",
+        threads=1,
+        max_time="1h",
+    )
+    outputs = binner.run()
+    assert [os.path.basename(p) for p in outputs] == ["skip_0-1h_2reads_80bp.fastq.gz"]
+    assert sorted(read_ids(outputs[0])) == ["read1", "read2"]

@@ -34,6 +34,13 @@ def build_parser() -> ArgumentParser:
              "contains the reads of the first hour.",
     )
     parser.add_argument(
+        "-m", "--max-time", metavar="2h", default=None,
+        help="Only bin reads acquired up to this elapsed time; later reads\n"
+             "are discarded. E.g. '-i 2h -m 2h' produces a single file with\n"
+             "the first two hours of the run. Same format as --interval.\n"
+             "Default: bin the whole run.",
+    )
+    parser.add_argument(
         "-p", "--prefix", metavar="my_sample", default="interval",
         help="Output file prefix. Files are named like\n"
              "'my_sample_0-1h_123reads_456789bp.fastq.gz'.\n"
@@ -66,6 +73,7 @@ def main(argv=None) -> int:
             prefix=args.prefix,
             threads=args.threads,
             compresslevel=args.compression_level,
+            max_time=args.max_time,
         )
         binner.run()
     except (ValueError, FileNotFoundError) as err:

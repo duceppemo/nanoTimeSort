@@ -27,7 +27,7 @@ from collections import OrderedDict
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
-from math import floor
+from math import ceil, floor
 from time import time
 from typing import IO, Iterator, List, Optional, Tuple
 
@@ -115,13 +115,15 @@ def chunk_file(
     t_min: datetime,
     bin_seconds: float,
     num_bins: int,
+    cutoff_seconds: Optional[float],
     chunk_dir: str,
     compresslevel: int,
 ) -> Tuple[List[int], List[int]]:
     """Pass 2: write each read of one file into its interval chunk.
 
     Chunk files are opened lazily, so intervals with no reads in this file
-    cost nothing. Returns per-interval read and base-pair counts.
+    cost nothing. Reads at or past ``cutoff_seconds`` (when set) are
+    discarded. Returns per-interval read and base-pair counts.
     """
     reads_per_bin = [0] * num_bins
     bp_per_bin = [0] * num_bins
@@ -137,6 +139,8 @@ def chunk_file(
                 if start_time is None:
                     continue
                 elapsed = (start_time - t_min).total_seconds()
+                if cutoff_seconds is not None and elapsed >= cutoff_seconds:
+                    continue
                 bin_index = min(floor(elapsed / bin_seconds), num_bins - 1)
                 out = handles.get(bin_index)
                 if out is None:
@@ -176,6 +180,7 @@ class NanoTimeSort:
         prefix: str = "interval",
         threads: int = 1,
         compresslevel: int = 4,
+        max_time: Optional[str] = None,
     ):
         self.input_path = input_path
         self.output_folder = output_folder
@@ -184,6 +189,14 @@ class NanoTimeSort:
         self.compresslevel = compresslevel
         self.bin_size, self.units = self._parse_interval(interval)
         self.bin_seconds = self.bin_size * UNIT_SECONDS[self.units]
+        if max_time is None:
+            self.max_seconds = None
+            self.max_label = None
+        else:
+            max_value, max_units = self._parse_interval(max_time)
+            self.max_seconds = max_value * UNIT_SECONDS[max_units]
+            # Label the truncated last bin the way the user wrote the cutoff.
+            self.max_label = format_number(max_value) + max_units
 
     @staticmethod
     def _parse_interval(interval: str) -> Tuple[float, str]:
@@ -235,21 +248,42 @@ class NanoTimeSort:
 
         t_min, t_max = min(t_mins), max(t_maxs)
         run_seconds = (t_max - t_min).total_seconds()
-        num_bins = int(run_seconds // self.bin_seconds) + 1
-        print(
-            "Run spans {} -> {} intervals of {}{}".format(
-                elapsed_time(run_seconds), num_bins, format_number(self.bin_size), self.units
+        cutoff = None
+        if self.max_seconds is not None and self.max_seconds <= run_seconds:
+            cutoff = self.max_seconds
+            num_bins = ceil(cutoff / self.bin_seconds)
+            print(
+                "Run spans {}; binning only the first {} -> {} interval(s) of {}{}".format(
+                    elapsed_time(run_seconds), self.max_label, num_bins,
+                    format_number(self.bin_size), self.units,
+                )
             )
-        )
+        else:
+            num_bins = int(run_seconds // self.bin_seconds) + 1
+            print(
+                "Run spans {} -> {} intervals of {}{}".format(
+                    elapsed_time(run_seconds), num_bins, format_number(self.bin_size), self.units
+                )
+            )
 
         # Pass 2: compress each read once into its interval chunk.
         print("Binning reads...", end="", flush=True)
         start = time()
         with tempfile.TemporaryDirectory(prefix="nanotimesort_", dir=self.output_folder) as chunk_dir:
-            jobs = [
-                (path, i, t_min, self.bin_seconds, num_bins, chunk_dir, self.compresslevel)
-                for i, path in enumerate(fastq_list)
-            ]
+            # With a cutoff, whole files whose earliest read is already past
+            # it never need to be decompressed again.
+            jobs = []
+            skipped_files = 0
+            for i, path in enumerate(fastq_list):
+                if cutoff is not None and (
+                    scans[i].t_min is None
+                    or (scans[i].t_min - t_min).total_seconds() >= cutoff
+                ):
+                    skipped_files += 1
+                    continue
+                jobs.append(
+                    (path, i, t_min, self.bin_seconds, num_bins, cutoff, chunk_dir, self.compresslevel)
+                )
             results = self._starmap(chunk_file, jobs, workers)
             reads_per_bin = [0] * num_bins
             bp_per_bin = [0] * num_bins
@@ -257,12 +291,16 @@ class NanoTimeSort:
                 for b in range(num_bins):
                     reads_per_bin[b] += file_reads[b]
                     bp_per_bin[b] += file_bp[b]
-            print(" done in {}".format(elapsed_time(time() - start)))
+            skipped_note = (
+                " ({} file(s) past the cutoff skipped)".format(skipped_files) if skipped_files else ""
+            )
+            print(" done in {}{}".format(elapsed_time(time() - start), skipped_note))
 
             # Pass 3: assemble cumulative outputs by gzip member concatenation.
             print("Writing cumulative interval files...", end="", flush=True)
             start = time()
-            outputs = self._assemble(chunk_dir, num_bins, reads_per_bin, bp_per_bin)
+            last_label = self.max_label if cutoff is not None else None
+            outputs = self._assemble(chunk_dir, num_bins, reads_per_bin, bp_per_bin, last_label)
             print(" done in {}".format(elapsed_time(time() - start)))
 
         print("Total run time: {}".format(elapsed_time(time() - overall_start)))
@@ -274,6 +312,7 @@ class NanoTimeSort:
         num_bins: int,
         reads_per_bin: List[int],
         bp_per_bin: List[int],
+        last_label: Optional[str] = None,
     ) -> List[str]:
         chunk_names = sorted(os.listdir(chunk_dir))
         outputs: List[str] = []
@@ -284,9 +323,15 @@ class NanoTimeSort:
         for b in range(num_bins):
             cumulative_reads += reads_per_bin[b]
             cumulative_bp += bp_per_bin[b]
-            label = format_number((b + 1) * self.bin_size)
-            out_name = "{}_0-{}{}_{}reads_{}bp.fastq.gz".format(
-                self.prefix, label, self.units, cumulative_reads, cumulative_bp
+            if last_label is not None and b == num_bins - 1:
+                # A --max-time cutoff truncates the last bin: name it after
+                # the actual cutoff so the file never claims more time than
+                # it contains.
+                span = last_label
+            else:
+                span = format_number((b + 1) * self.bin_size) + self.units
+            out_name = "{}_0-{}_{}reads_{}bp.fastq.gz".format(
+                self.prefix, span, cumulative_reads, cumulative_bp
             )
             out_path = os.path.join(self.output_folder, out_name)
             prefix = "chunk_b{:06d}_".format(b)

@@ -11,6 +11,7 @@ nanotimesort -f /path/to/fastq_pass/ -o /path/to/output/ -i 1h -p my_sample
 | `-f, --fastq` | yes | Input folder (searched recursively) or a single FASTQ file. Accepts `.fastq`, `.fq`, `.fastq.gz` and `.fq.gz`. |
 | `-o, --output` | yes | Output folder. Created if it does not exist. |
 | `-i, --interval` | yes | Time interval for the bins, e.g. `1h`, `30m` or `90s`. Fractional values like `0.5h` work too. Bins are cumulative. |
+| `-m, --max-time` | no | Only bin reads acquired up to this elapsed time; later reads are discarded. Same format as `--interval`. Default: bin the whole run. |
 | `-p, --prefix` | no | Output file prefix. Default: `interval`. |
 | `-t, --threads` | no | Number of FASTQ files to process in parallel. Default: all CPUs. |
 | `-c, --compression-level` | no | Gzip level for output files, 1 (fastest) to 9 (smallest). Default: 4. |
@@ -48,6 +49,26 @@ Basecalled to BAM with Dorado? Convert while keeping the tags:
 ```bash
 samtools fastq -T '*' calls.bam | gzip > calls.fastq.gz
 ```
+
+## Keeping only the start of a run
+
+If you only care about the first part of a run (say, the first two hours), add `--max-time` so
+the rest of the run is never compressed:
+
+```bash
+nanotimesort -f fastq_pass/ -o binned/ -i 2h -m 2h -p my_sample
+# -> my_sample_0-2h_...fastq.gz  (a single file, nothing else)
+```
+
+- `-i 30m -m 2h` gives four cumulative bins covering just the first 2 hours.
+- A cutoff smaller than the interval (`-i 1h -m 30m`) yields a single file named after the
+  cutoff (`..._0-30m_...`).
+- If the cutoff is not a multiple of the interval (`-i 30m -m 75m`), the last file is named
+  after the actual cutoff (`0-30m`, `0-60m`, `0-75m`), so names never claim more time than
+  they contain. A read acquired at exactly the cutoff is excluded.
+- This is much faster than binning the whole run: input files whose reads all start past the
+  cutoff are skipped without being decompressed, nothing past the cutoff is ever compressed,
+  and the (quadratic) cumulative assembly only covers the kept window.
 
 ## Tips
 

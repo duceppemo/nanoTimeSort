@@ -30,6 +30,12 @@ The tool's main use case is "what would my analysis have looked like after N hou
 sequencing?" — each file is a self-contained snapshot of the run at that point, ready to feed to
 an assembler or classifier without concatenating anything.
 
+## I only want the first N hours of the run. Do I have to bin everything?
+
+No — use `--max-time`: `nanotimesort -f fastq/ -o out/ -i 2h -m 2h` produces a single file with
+the first two hours and discards the rest, much faster than binning the whole run. See
+[[Usage]] for the details.
+
 ## What happens to reads without a start time?
 
 They are skipped, and a single warning with the total count is printed at the end of the scan
