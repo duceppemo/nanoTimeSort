@@ -219,8 +219,8 @@ def test_max_time_beyond_run_end_is_noop(run_folder, tmp_path):
     assert sorted(read_ids(outputs[-1])) == ["read1", "read2", "read3", "read4", "read5"]
 
 
-def test_max_time_boundary_read_excluded(run_folder, tmp_path):
-    """A read at exactly the cutoff is excluded (half-open interval)."""
+def test_max_time_boundary_read_included(run_folder, tmp_path):
+    """The cutoff is inclusive: a read at exactly --max-time is kept."""
     out_dir = tmp_path / "out_edge"
     binner = NanoTimeSort(
         input_path=str(run_folder),
@@ -231,7 +231,8 @@ def test_max_time_boundary_read_excluded(run_folder, tmp_path):
         max_time="90m",  # read4 sits at exactly 90 min
     )
     outputs = binner.run()
-    assert sorted(read_ids(outputs[-1])) == ["read1", "read2", "read3"]
+    assert len(outputs) == 3  # the cap holds: no file named past 90m
+    assert sorted(read_ids(outputs[-1])) == ["read1", "read2", "read3", "read4"]
 
 
 def test_max_time_skips_late_files(run_folder, tmp_path):
@@ -417,12 +418,55 @@ def test_float_imprecision_no_spurious_bin(run_folder, tmp_path):
 
 
 def test_cutoff_equal_to_run_length_keeps_last_read(tmp_path):
-    """-m equal to the exact run span must not drop the t_max read."""
+    """-m equal to the exact run span keeps the t_max read AND honors the
+    cap in the file naming (one file, named at the cutoff)."""
     folder = tmp_path / "fq"
     content = make_read("first", 0) + make_read("last", 60)  # span exactly 1 h
     write_fastq(folder, "exact.fastq", content)
     outputs = run_binner(folder, tmp_path / "out", interval="1h", max_time="1h")
+    assert [os.path.basename(p) for p in outputs] == ["edge_0-1h_2reads_80bp.fastq.gz"]
+    assert sorted(read_ids(outputs[0])) == ["first", "last"]
+
+
+def test_cutoff_engages_even_with_coarse_interval(tmp_path):
+    """-i 10m -m 1h on an exactly-1h run: no file may be named past 1h."""
+    folder = tmp_path / "fq"
+    content = make_read("first", 0) + make_read("last", 60)
+    write_fastq(folder, "exact.fastq", content)
+    outputs = run_binner(folder, tmp_path / "out", interval="10m", max_time="1h")
+    names = [os.path.basename(p) for p in outputs]
+    assert len(outputs) == 6
+    assert names[-1] == "edge_0-1h_2reads_80bp.fastq.gz"
     assert sorted(read_ids(outputs[-1])) == ["first", "last"]
+
+
+def test_fractional_interval_labels_have_no_float_noise(run_folder, tmp_path):
+    """(b+1)*0.1 floats to 0.30000000000000004; labels must stay clean."""
+    outputs = run_binner(run_folder, tmp_path / "out", interval="0.1h")
+    names = [os.path.basename(p) for p in outputs]
+    assert "edge_0-0.3h_" in "".join(n[: len("edge_0-0.3h_")] for n in names if "0.3" in n)
+    for name in names:
+        assert "00000" not in name, name
+
+
+def test_compute_num_bins_large_ratio():
+    """Relative tolerance: float error grows with the ratio's magnitude."""
+    from nanotimesort.binner import compute_num_bins
+
+    # 8389271 * 0.36 / 0.36 floats to 8389271.000000002 on IEEE doubles;
+    # an absolute epsilon would still ceil this to 8389272.
+    assert compute_num_bins(8389271 * 0.36, 0.36) == 8389271
+    assert compute_num_bins(3960.0000000000005, 360.00000000000006) == 11
+    assert compute_num_bins(3780.0, 3600.0) == 2  # genuine partial bin
+    assert compute_num_bins(1.0, 3600.0) == 1
+
+
+def test_all_timestamps_malformed_gives_accurate_error(tmp_path):
+    folder = tmp_path / "fq"
+    content = "@r1 start_time=notadate\nACGT\n+\nIIII\n@r2 start_time=alsobad\nACGT\n+\nIIII\n"
+    write_fastq(folder, "bad.fastq", content)
+    with pytest.raises(ValueError, match="could not be parsed"):
+        run_binner(folder, tmp_path / "out")
 
 
 def test_max_time_error_names_the_right_flag():

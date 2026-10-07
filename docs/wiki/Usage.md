@@ -65,7 +65,7 @@ nanotimesort -f fastq_pass/ -o binned/ -i 2h -m 2h -p my_sample
   cutoff (`..._0-30m_...`).
 - If the cutoff is not a multiple of the interval (`-i 30m -m 75m`), the last file is named
   after the actual cutoff (`0-30m`, `0-60m`, `0-75m`), so names never claim more time than
-  they contain. A read acquired at exactly the cutoff is excluded.
+  they contain. The cutoff is inclusive: a read acquired at exactly `--max-time` is kept.
 - This is much faster than binning the whole run: nothing past the cutoff is ever compressed,
   input files whose reads all start past the cutoff are not read a second time in the binning
   pass (the initial scan still decompresses every file once to read the timestamps), and the

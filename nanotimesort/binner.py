@@ -132,8 +132,9 @@ def chunk_file(
     """Pass 2: write each read of one file into its interval chunk.
 
     Chunk files are opened lazily, so intervals with no reads in this file
-    cost nothing. Reads at or past ``cutoff_seconds`` (when set) are
-    discarded. Returns per-interval read and base-pair counts.
+    cost nothing. Reads acquired after ``cutoff_seconds`` (when set) are
+    discarded; the cutoff itself is inclusive. Returns per-interval read
+    and base-pair counts.
     """
     reads_per_bin = [0] * num_bins
     bp_per_bin = [0] * num_bins
@@ -149,7 +150,9 @@ def chunk_file(
                 if start_time is None:
                     continue
                 elapsed = (start_time - t_min).total_seconds()
-                if cutoff_seconds is not None and elapsed >= cutoff_seconds:
+                # The cutoff is inclusive: a read acquired at exactly
+                # --max-time is kept (it lands in the last bin via the clamp).
+                if cutoff_seconds is not None and elapsed > cutoff_seconds:
                     continue
                 bin_index = min(floor(elapsed / bin_seconds), num_bins - 1)
                 out = handles.get(bin_index)
@@ -176,9 +179,29 @@ def chunk_file(
     return reads_per_bin, bp_per_bin
 
 
+def compute_num_bins(cutoff_seconds: float, bin_seconds: float) -> int:
+    """Number of bins needed to cover ``cutoff_seconds``.
+
+    ceil() of the raw ratio is wrong under float error: e.g.
+    (1.1*3600)/(0.1*3600) == 11.000000000000002 would gain a spurious
+    twelfth bin. The error scales with the ratio's magnitude, so the ratio
+    is snapped to the nearest integer under a *relative* tolerance first.
+    """
+    ratio = cutoff_seconds / bin_seconds
+    nearest = round(ratio)
+    if nearest > 0 and abs(ratio - nearest) <= 1e-9 * nearest:
+        return nearest
+    return max(1, ceil(ratio))
+
+
 def format_number(value: float) -> str:
-    """Render 2.0 as '2' and 0.5 as '0.5' for use in file names."""
-    return str(int(value)) if float(value).is_integer() else str(value)
+    """Render 2.0 as '2' and 0.5 as '0.5' for use in file names.
+
+    Rounds away float noise first, so bin labels computed as (b+1)*0.1
+    come out as '0.3', never '0.30000000000000004'.
+    """
+    value = round(float(value), 10)
+    return str(int(value)) if value.is_integer() else str(value)
 
 
 class NanoTimeSort:
@@ -262,6 +285,11 @@ class NanoTimeSort:
                 file=sys.stderr,
             )
         if not t_mins:
+            if total_malformed:
+                raise ValueError(
+                    "No usable read start times: {} read(s) have a start-time field "
+                    "whose value could not be parsed.".format(total_malformed)
+                )
             raise ValueError(
                 "No read start times found. Headers must contain a Guppy/MinKNOW "
                 "'start_time=' field or a Dorado 'st:Z:' tag."
@@ -270,15 +298,12 @@ class NanoTimeSort:
         t_min, t_max = min(t_mins), max(t_maxs)
         run_seconds = (t_max - t_min).total_seconds()
         cutoff = None
-        # Strictly '<': a cutoff equal to the run length must not silently
-        # drop the read(s) acquired at exactly t_max.
-        if self.max_seconds is not None and self.max_seconds < run_seconds:
+        # '<=': a cutoff equal to the run length must still engage so the
+        # last file is named within the requested cap; the inclusive read
+        # filter keeps the read(s) acquired at exactly t_max.
+        if self.max_seconds is not None and self.max_seconds <= run_seconds:
             cutoff = self.max_seconds
-            # The small tolerance guards against float imprecision creating a
-            # spurious extra bin (e.g. (1.1*3600)/(0.1*3600) -> 11.000000000000002,
-            # whose ceil would be 12); the extra bin's name would collide with
-            # the real last bin's cutoff label.
-            num_bins = max(1, ceil(cutoff / self.bin_seconds - 1e-9))
+            num_bins = compute_num_bins(cutoff, self.bin_seconds)
             print(
                 "Run spans {}; binning only the first {} -> {} interval(s) of {}{}".format(
                     elapsed_time(run_seconds), self.max_label, num_bins,
@@ -304,7 +329,9 @@ class NanoTimeSort:
             for i, path in enumerate(fastq_list):
                 if scans[i].t_min is None:
                     continue  # no binnable reads in this file at any time
-                if cutoff is not None and (scans[i].t_min - t_min).total_seconds() >= cutoff:
+                # '>' matches the inclusive read filter: a file whose first
+                # read sits exactly at the cutoff still holds that read.
+                if cutoff is not None and (scans[i].t_min - t_min).total_seconds() > cutoff:
                     skipped_files += 1
                     continue
                 jobs.append(
