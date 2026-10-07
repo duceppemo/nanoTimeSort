@@ -1,0 +1,31 @@
+<svg width="600" height="140" viewBox="0 0 600 140" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="nanoTimeSort logo">
+  <!-- Icon: a nanopore as a clock face -->
+  <g>
+    <circle cx="70" cy="70" r="46" fill="none" stroke="#0d9488" stroke-width="8"/>
+    <!-- clock ticks -->
+    <line x1="70" y1="30" x2="70" y2="38" stroke="#0d9488" stroke-width="4" stroke-linecap="round"/>
+    <line x1="110" y1="70" x2="102" y2="70" stroke="#0d9488" stroke-width="4" stroke-linecap="round"/>
+    <line x1="70" y1="110" x2="70" y2="102" stroke="#0d9488" stroke-width="4" stroke-linecap="round"/>
+    <line x1="30" y1="70" x2="38" y2="70" stroke="#0d9488" stroke-width="4" stroke-linecap="round"/>
+    <!-- clock hands -->
+    <line x1="70" y1="70" x2="70" y2="46" stroke="#f59e0b" stroke-width="6" stroke-linecap="round"/>
+    <line x1="70" y1="70" x2="87" y2="80" stroke="#f59e0b" stroke-width="6" stroke-linecap="round"/>
+    <!-- nanopore current squiggle passing under the clock -->
+    <path d="M 14 126 L 26 126 L 26 118 L 38 118 L 38 128 L 52 128 L 52 120 L 66 120 L 66 127 L 80 127 L 80 117 L 94 117 L 94 125 L 108 125 L 108 121 L 126 121"
+          fill="none" stroke="#64748b" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Cumulative time-bin bars -->
+  <g>
+    <rect x="150" y="96" width="30" height="16" rx="5" fill="#2dd4bf"/>
+    <rect x="150" y="72" width="54" height="16" rx="5" fill="#22b8a6"/>
+    <rect x="150" y="48" width="78" height="16" rx="5" fill="#14a38f"/>
+    <rect x="150" y="24" width="102" height="16" rx="5" fill="#0d9488"/>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="276" y="86" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+        font-size="46" font-weight="700"><tspan fill="#0d9488">nano</tspan><tspan fill="#f59e0b">Time</tspan><tspan fill="#3b82f6">Sort</tspan></text>
+  <text x="278" y="114" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+        font-size="15" font-weight="400" fill="#64748b">bin Nanopore reads by sequencing time</text>
+</svg>

@@ -1,4 +1,6 @@
-# nanoTimeSort wiki
+<p align="center">
+  <img src="https://raw.githubusercontent.com/duceppemo/nanoTimeSort/master/docs/images/logo.svg" alt="nanoTimeSort" width="520">
+</p>
 
 **nanoTimeSort** bins Oxford Nanopore reads by cumulative sequencing time intervals, using the
 read start time embedded in every FASTQ header by MinKNOW, Guppy and Dorado.
@@ -6,8 +8,10 @@ read start time embedded in every FASTQ header by MinKNOW, Guppy and Dorado.
 ## Pages
 
 - [[Installation]] — requirements and install options
+- [[Usage]] — CLI reference, output naming, supported FASTQ headers
 - [[Tutorial]] — a complete worked example, from input data to binned output
-- [[FAQ]] — common questions (header compatibility, cumulative bins, multi-member gzip, speed)
+- [[How it works|How-it-works]] — the three-stage pipeline and why v1.0 is ~100× faster
+- [[FAQ]] — common questions (header compatibility, cumulative bins, multi-member gzip)
 
 ## What is it for?
 
