@@ -4,6 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/duceppemo/nanoTimeSort/actions/workflows/ci.yml"><img src="https://github.com/duceppemo/nanoTimeSort/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://codecov.io/gh/duceppemo/nanoTimeSort"><img src="https://codecov.io/gh/duceppemo/nanoTimeSort/branch/master/graph/badge.svg" alt="codecov"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.8%2B-blue.svg" alt="Python 3.8+"></a>
   <a href="pyproject.toml"><img src="https://img.shields.io/badge/dependencies-none-brightgreen.svg" alt="No dependencies"></a>
