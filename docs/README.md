@@ -1,16 +1,14 @@
 # Documentation sources
 
 `wiki/` holds the source pages for the GitHub wiki
-(<https://github.com/duceppemo/nanoTimeSort/wiki>). GitHub wikis live in a separate repository,
-so after editing these pages, publish them with:
+(<https://github.com/duceppemo/nanoTimeSort/wiki>) and is the **single source of truth**.
 
-```bash
-# One-time: create the wiki by visiting the Wiki tab on GitHub and saving the initial page,
-# then:
-git clone https://github.com/duceppemo/nanoTimeSort.wiki.git /tmp/nanoTimeSort.wiki
-cp wiki/*.md /tmp/nanoTimeSort.wiki/
-cd /tmp/nanoTimeSort.wiki
-git add -A && git commit -m "Update wiki" && git push
-```
+Every push to `master` that touches `docs/wiki/**` triggers the
+[Sync wiki](../.github/workflows/sync-wiki.yml) workflow, which mirrors the folder to the wiki
+(deleting wiki pages that no longer exist here). **Do not edit the wiki directly** — changes
+made there will be overwritten by the next sync.
 
-`Home.md` is the wiki landing page; `[[Page]]` links map to the other file names.
+`Home.md` is the wiki landing page, `_Sidebar.md` the navigation, and `[[Page]]` links map to
+the other file names.
+
+`RELEASING.md` documents how to publish a new version to PyPI.
