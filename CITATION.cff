@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use nanoTimeSort in your research, please cite it as below."
+title: "nanoTimeSort: bin Oxford Nanopore reads by cumulative sequencing time intervals"
+type: software
+authors:
+  - family-names: Duceppe
+    given-names: Marc-Olivier
+    email: duceppemo@gmail.com
+repository-code: "https://github.com/duceppemo/nanoTimeSort"
+url: "https://github.com/duceppemo/nanoTimeSort/wiki"
+license: MIT
+keywords:
+  - bioinformatics
+  - nanopore
+  - oxford-nanopore
+  - fastq
+  - sequencing
+  - dorado
+  - guppy
+  - binning

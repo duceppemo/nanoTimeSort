@@ -24,3 +24,7 @@ Notes:
 - The workflow fails fast if the tag does not match `__version__`, so a forgotten bump can't
   publish a wrong version.
 - Publishing uses PyPI trusted publishing (OIDC) — no API token to rotate.
+- Zenodo archives every GitHub release automatically and mints a new versioned DOI under the
+  same concept DOI; the README badge always resolves to the latest one. No per-release step
+  is needed (requires the repository to be enabled once at
+  <https://zenodo.org/account/settings/github/>).

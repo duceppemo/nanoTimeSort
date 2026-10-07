@@ -9,6 +9,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.8%2B-blue.svg" alt="Python 3.8+"></a>
   <a href="pyproject.toml"><img src="https://img.shields.io/badge/dependencies-none-brightgreen.svg" alt="No dependencies"></a>
+  <a href="https://zenodo.org/badge/latestdoi/209610655"><img src="https://zenodo.org/badge/209610655.svg" alt="DOI"></a>
 </p>
 
 Bin Oxford Nanopore reads by **cumulative sequencing time intervals**, using the read start time
@@ -42,6 +43,12 @@ nanotimesort -f /path/to/fastq_pass/ -o /path/to/output/ -i 1h -p my_sample
 
 📖 **Full documentation** — CLI reference, tutorial with example data, header compatibility,
 design notes and FAQ — is in the [**wiki**](https://github.com/duceppemo/nanoTimeSort/wiki).
+
+## Citation
+
+If you use nanoTimeSort in your research, please cite it. GitHub's **"Cite this repository"**
+button (from [`CITATION.cff`](CITATION.cff)) gives APA/BibTeX entries, and the DOI badge above
+resolves to the citable Zenodo archive of the latest release.
 
 ## License
 
